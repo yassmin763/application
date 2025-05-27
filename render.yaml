@@ -5,3 +5,4 @@ services:
     buildCommand: ""
     startCommand: gunicorn app:app -k uvicorn.workers.UvicornWorker
     plan: free
+
