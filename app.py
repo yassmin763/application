@@ -1,16 +1,19 @@
 from flask import Flask, request, jsonify
 import tensorflow as tf
-from tensorflow.keras.models import load_model
 import numpy as np
-import cv2
-import io
 from PIL import Image
+import io
 
 app = Flask(__name__)
 
-# Load your trained model
-MODEL_PATH = 'model.tflite'  # change if your model filename is different
-model = load_model(MODEL_PATH)
+# Load TFLite model and allocate tensors.
+MODEL_PATH = 'model.tflite'
+interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+interpreter.allocate_tensors()
+
+# Get input and output tensor details
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
 
 # Your class names (ensure this matches your label encoder classes)
 class_names = [
@@ -20,20 +23,15 @@ class_names = [
     'Cordia', 'Costus', 'Eucalyptus', 'Euphorbia', 'Fabaceae'
 ]
 
-IMG_SIZE = 128  # your model input size
+IMG_SIZE = 128  # Model input size (adjust if needed)
 
 
 def preprocess_image(image_bytes):
-    # Open image
     img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-    # Resize
     img = img.resize((IMG_SIZE, IMG_SIZE))
-    # Convert to numpy array
-    img_array = np.array(img)
-    # Normalize
-    img_array = img_array / 255.0
-    # Expand dims to match model input shape (1, IMG_SIZE, IMG_SIZE, 3)
-    img_array = np.expand_dims(img_array, axis=0)
+    img_array = np.array(img).astype(np.float32)
+    img_array = img_array / 255.0  # normalize to 0-1
+    img_array = np.expand_dims(img_array, axis=0)  # add batch dim
     return img_array
 
 
@@ -48,13 +46,18 @@ def predict():
 
     try:
         img_bytes = file.read()
-        img = preprocess_image(img_bytes)
+        input_data = preprocess_image(img_bytes)
 
-        # Predict
-        preds = model.predict(img)
-        pred_class_idx = np.argmax(preds, axis=1)[0]
+        # Set the tensor to point to the input data to be inferred
+        interpreter.set_tensor(input_details[0]['index'], input_data)
+        interpreter.invoke()
+
+        # The function `get_tensor()` returns a copy of the tensor data.
+        output_data = interpreter.get_tensor(output_details[0]['index'])
+
+        pred_class_idx = np.argmax(output_data, axis=1)[0]
         pred_class_name = class_names[pred_class_idx]
-        confidence = float(np.max(preds))
+        confidence = float(np.max(output_data))
 
         return jsonify({
             'predicted_class': pred_class_name,
@@ -69,7 +72,7 @@ def predict():
 def index():
     return """
     <h1>Pollen Grain Classifier</h1>
-    <p>Use POST /predict with an image file to get prediction.</p>
+    <p>Send a POST request to /predict with an image file.</p>
     """
 
 
