@@ -1,4 +1,6 @@
-Flask
-tensorflow
+fastapi
+uvicorn
 numpy
+tensorflow
+pillow
 gunicorn
