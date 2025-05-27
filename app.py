@@ -9,7 +9,7 @@ from PIL import Image
 app = Flask(__name__)
 
 # Load your trained model
-MODEL_PATH = 'model.h5'  # change if your model filename is different
+MODEL_PATH = 'model.tflite'  # change if your model filename is different
 model = load_model(MODEL_PATH)
 
 # Your class names (ensure this matches your label encoder classes)
