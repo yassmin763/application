@@ -1,35 +1,57 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
 import numpy as np
 import tensorflow as tf
+import uvicorn
+import io
 
-app = Flask(__name__)
+app = FastAPI()
 
-# تحميل النموذج tflite
+# Allow CORS for Flutter app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Load TFLite model
 interpreter = tf.lite.Interpreter(model_path="model.tflite")
 interpreter.allocate_tensors()
-
-# الحصول على تفاصيل المدخلات والمخرجات
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-@app.route('/')
-def home():
-    return "TFLite Model API is running."
+# Optionally, load class labels
+labels = ['anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
+    'combretum', 'croton', 'dipteryx', 'eucalipto', 'faramea', 'hyptis', 'mabea',
+    'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
+    'serjania', 'syagrus', 'tridax', 'urochloa']  # Replace with your labels
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    try:
-        data = request.get_json()
-        input_data = np.array(data['input'], dtype=np.float32).reshape(input_details[0]['shape'])
+def preprocess(image_bytes):
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = image.resize((128, 128))  # Adjust based on your model input size
+    img_array = np.array(image).astype(np.float32) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    return img_array
 
-        # إدخال البيانات إلى المفسر
-        interpreter.set_tensor(input_details[0]['index'], input_data)
-        interpreter.invoke()
+@app.post("/predict/")
+async def predict(file: UploadFile = File(...)):
+    contents = await file.read()
+    input_data = preprocess(contents)
 
-        # الحصول على النتيجة
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-        prediction = output_data.tolist()
+    interpreter.set_tensor(input_details[0]['index'], input_data)
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_details[0]['index'])
 
-        return jsonify({'prediction': prediction})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+    class_index = int(np.argmax(output_data))
+    confidence = float(np.max(output_data))
+    result = {
+        "class": labels[class_index],
+        "confidence": confidence
+    }
+    return result
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
