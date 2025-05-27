@@ -1,78 +1,80 @@
-from flask import Flask, request, jsonify
-import tensorflow as tf
+from flask import Flask, request, jsonify, render_template
 import numpy as np
-from PIL import Image
-import io
+import tensorflow as tf
+import cv2
+import os
 
 app = Flask(__name__)
 
-# Load TFLite model and allocate tensors.
-MODEL_PATH = 'model.tflite'
-interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+# Load the TFLite model and allocate tensors
+interpreter = tf.lite.Interpreter(model_path="model.tflite")
 interpreter.allocate_tensors()
 
-# Get input and output tensor details
+# Get input and output details
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# Your class names (ensure this matches your label encoder classes)
-class_names = [
-    'Acalypha', 'Adenanthera', 'Alchornea', 'Alnus', 'Amaranthus', 'Anadenanthera', 
-    'Anona', 'Artocarpus', 'Bauhinia', 'Bignoniaceae', 'Borassus', 'Calliandra', 
-    'Canavalia', 'Casuarina', 'Ceiba', 'Cocos', 'Combretaceae', 'Convolvulaceae', 
-    'Cordia', 'Costus', 'Eucalyptus', 'Euphorbia', 'Fabaceae'
-]
+# Model input details
+input_shape = input_details[0]['shape']  # e.g. [1, 128, 128, 3]
+input_height, input_width = input_shape[1], input_shape[2]
 
-IMG_SIZE = 128  # Model input size (adjust if needed)
+# Load class names (update this list based on your dataset classes)
+class_names = ['anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
+    'combretum', 'croton', 'dipteryx', 'eucalipto', 'faramea', 'hyptis', 'mabea',
+    'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
+    'serjania', 'syagrus', 'tridax', 'urochloa']
 
+def preprocess_image(image):
+    """
+    Preprocess uploaded image for model inference:
+    - Resize to model input size
+    - Normalize pixel values to [0,1]
+    """
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, (input_width, input_height))
+    image = image.astype(np.float32) / 255.0
+    image = np.expand_dims(image, axis=0)  # Add batch dimension
+    return image
 
-def preprocess_image(image_bytes):
-    img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-    img = img.resize((IMG_SIZE, IMG_SIZE))
-    img_array = np.array(img).astype(np.float32)
-    img_array = img_array / 255.0  # normalize to 0-1
-    img_array = np.expand_dims(img_array, axis=0)  # add batch dim
-    return img_array
+def predict(image):
+    """
+    Run inference on the preprocessed image and return predicted class and confidence.
+    """
+    interpreter.set_tensor(input_details[0]['index'], image)
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_details[0]['index'])[0]  # output shape e.g. (23,)
+    
+    predicted_index = np.argmax(output_data)
+    confidence = float(output_data[predicted_index])
+    predicted_class = class_names[predicted_index]
 
+    return predicted_class, confidence
+
+@app.route('/')
+def home():
+    return render_template('index.html')  # create a simple form in index.html for image upload
 
 @app.route('/predict', methods=['POST'])
-def predict():
+def predict_route():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file part in request'}), 400
+        return jsonify({'error': 'No file uploaded'}), 400
 
     file = request.files['file']
     if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
+        return jsonify({'error': 'No selected file'}), 400
 
-    try:
-        img_bytes = file.read()
-        input_data = preprocess_image(img_bytes)
+    # Read image as OpenCV format
+    file_bytes = np.frombuffer(file.read(), np.uint8)
+    img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+    if img is None:
+        return jsonify({'error': 'Invalid image'}), 400
 
-        # Set the tensor to point to the input data to be inferred
-        interpreter.set_tensor(input_details[0]['index'], input_data)
-        interpreter.invoke()
+    # Preprocess and predict
+    img_processed = preprocess_image(img)
+    pred_class, confidence = predict(img_processed)
 
-        # The function `get_tensor()` returns a copy of the tensor data.
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-
-        pred_class_idx = np.argmax(output_data, axis=1)[0]
-        pred_class_name = class_names[pred_class_idx]
-        confidence = float(np.max(output_data))
-
-        return jsonify({
-            'predicted_class': pred_class_name,
-            'confidence': confidence
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/')
-def index():
-    return """
-    <h1>Pollen Grain Classifier</h1>
-    <p>Send a POST request to /predict with an image file.</p>
-    """
-
+    return jsonify({
+        'predicted_class': pred_class,
+        'confidence': confidence
+    })
 
