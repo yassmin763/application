@@ -5,4 +5,4 @@ tensorflow
 pillow
 gunicorn
 python-multipart
-
+opencv-python
