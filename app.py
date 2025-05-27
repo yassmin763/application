@@ -1,56 +1,75 @@
-from fastapi import FastAPI, File, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image
-import numpy as np
+from flask import Flask, request, jsonify
 import tensorflow as tf
+from tensorflow.keras.models import load_model
+import numpy as np
 import cv2
 import io
+from PIL import Image
 
-app = FastAPI()
+app = Flask(__name__)
 
-# Enable CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Load your trained model
+MODEL_PATH = 'model.h5'  # change if your model filename is different
+model = load_model(MODEL_PATH)
 
-@app.get("/")
-async def home():
-    return {"message": "Pollen Grain Image Classification API is running"}
-
-# Load TFLite model
-interpreter = tf.lite.Interpreter(model_path="model.tflite")
-interpreter.allocate_tensors()
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
-
-# Define class labels
-labels = [
-    'anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
-    'combretum', 'croton', 'dipteryx', 'eucalipto', 'faramea', 'hyptis', 'mabea',
-    'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
-    'serjania', 'syagrus', 'tridax', 'urochloa'
+# Your class names (ensure this matches your label encoder classes)
+class_names = [
+    'Acalypha', 'Adenanthera', 'Alchornea', 'Alnus', 'Amaranthus', 'Anadenanthera', 
+    'Anona', 'Artocarpus', 'Bauhinia', 'Bignoniaceae', 'Borassus', 'Calliandra', 
+    'Canavalia', 'Casuarina', 'Ceiba', 'Cocos', 'Combretaceae', 'Convolvulaceae', 
+    'Cordia', 'Costus', 'Eucalyptus', 'Euphorbia', 'Fabaceae'
 ]
 
-def process_image(image_bytes):
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    img = img.resize((128, 128))
-    img = np.array(img) / 255.0
-    img = np.expand_dims(img, axis=0)  # Add batch dimension
-    return img
+IMG_SIZE = 128  # your model input size
 
-# API endpoint
-@app.post("/predict")
-async def predict(file: UploadFile = File(...)):
-    image_data = await file.read()
-    image = process_image(image_data)
 
-    predictions = model.predict(image)
-    predicted_index = np.argmax(predictions[0])
-    predicted_label = class_names[predicted_index]
-    confidence = float(np.max(predictions[0]))
+def preprocess_image(image_bytes):
+    # Open image
+    img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+    # Resize
+    img = img.resize((IMG_SIZE, IMG_SIZE))
+    # Convert to numpy array
+    img_array = np.array(img)
+    # Normalize
+    img_array = img_array / 255.0
+    # Expand dims to match model input shape (1, IMG_SIZE, IMG_SIZE, 3)
+    img_array = np.expand_dims(img_array, axis=0)
+    return img_array
 
-    return {"label": predicted_label, "confidence": round(confidence, 3)}
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in request'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    try:
+        img_bytes = file.read()
+        img = preprocess_image(img_bytes)
+
+        # Predict
+        preds = model.predict(img)
+        pred_class_idx = np.argmax(preds, axis=1)[0]
+        pred_class_name = class_names[pred_class_idx]
+        confidence = float(np.max(preds))
+
+        return jsonify({
+            'predicted_class': pred_class_name,
+            'confidence': confidence
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/')
+def index():
+    return """
+    <h1>Pollen Grain Classifier</h1>
+    <p>Use POST /predict with an image file to get prediction.</p>
+    """
+
+
