@@ -9,6 +9,13 @@ import cv2
 
 # FastAPI app
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # يمكنك تخصيصها لاحقاً
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get("/fati")
 def root():
     return {"message": "API is running"}
