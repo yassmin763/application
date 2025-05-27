@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: keras-api
+    name: tflite-api
     env: python
     buildCommand: ""
     startCommand: gunicorn app:app
