@@ -3,12 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import numpy as np
 import tensorflow as tf
-import uvicorn
 import io
 
 app = FastAPI()
 
-# Allow CORS for Flutter app
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,21 +15,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"message": "API is running"}
+
 # Load TFLite model
 interpreter = tf.lite.Interpreter(model_path="model.tflite")
 interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# Optionally, load class labels
 labels = ['anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
     'combretum', 'croton', 'dipteryx', 'eucalipto', 'faramea', 'hyptis', 'mabea',
     'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
-    'serjania', 'syagrus', 'tridax', 'urochloa']  # Replace with your labels
+    'serjania', 'syagrus', 'tridax', 'urochloa']
 
 def preprocess(image_bytes):
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    image = image.resize((128, 128))  # Adjust based on your model input size
+    image = image.resize((128, 128))
     img_array = np.array(image).astype(np.float32) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
@@ -52,5 +53,3 @@ async def predict(file: UploadFile = File(...)):
         "confidence": confidence
     }
     return result
-
-
