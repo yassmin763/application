@@ -9,7 +9,9 @@ import cv2
 
 # FastAPI app
 app = FastAPI()
-
+@app.get("/fati")
+def root():
+    return {"message": "API is running"}
 # Load TFLite model
 interpreter = tf.lite.Interpreter(model_path="model.tflite")
 interpreter.allocate_tensors()
