@@ -30,26 +30,34 @@ labels = ['anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
     'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
     'serjania', 'syagrus', 'tridax', 'urochloa']
 
-def preprocess(image_bytes):
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    image = image.resize((128, 128))
-    img_array = np.array(image).astype(np.float32) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    return img_array
+def process_img(img, size=(128, 128)):
+    img = cv2.resize(img, size)
+    img = img / 255.0
+    return np.expand_dims(img, axis=0)
 
-@app.post("/predict/")
-async def predict(file: UploadFile = File(...)):
-    contents = await file.read()
-    input_data = preprocess(contents)
+@app.route('/')
+def home():
+    return "Pollen Grain Image Classification API"
 
-    interpreter.set_tensor(input_details[0]['index'], input_data)
-    interpreter.invoke()
-    output_data = interpreter.get_tensor(output_details[0]['index'])
+@app.route('/predict', methods=['POST'])
+def predict():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
 
-    class_index = int(np.argmax(output_data))
-    confidence = float(np.max(output_data))
-    result = {
-        "class": labels[class_index],
+    file = request.files['file']
+    img_array = np.frombuffer(file.read(), np.uint8)
+    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+    if img is None:
+        return jsonify({'error': 'Invalid image'}), 400
+
+    processed = process_img(img)
+    predictions = model.predict(processed)
+    index = int(np.argmax(predictions))
+    confidence = float(np.max(predictions))
+
+    return jsonify({
+        "predicted_class": class_names[index],
         "confidence": confidence
-    }
-    return result
+    })
+
