@@ -35,32 +35,22 @@ labels = [
     'serjania', 'syagrus', 'tridax', 'urochloa'
 ]
 
-# Preprocessing function
-def preprocess(image_bytes):
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    image = image.resize((128, 128))
-    img_array = np.array(image).astype(np.float32) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    return img_array
+def process_image(image_bytes):
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = img.resize((128, 128))
+    img = np.array(img) / 255.0
+    img = np.expand_dims(img, axis=0)  # Add batch dimension
+    return img
 
+# API endpoint
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    contents = await file.read()
+    image_data = await file.read()
+    image = process_image(image_data)
 
-    # Preprocess image
-    input_data = preprocess(contents)
+    predictions = model.predict(image)
+    predicted_index = np.argmax(predictions[0])
+    predicted_label = class_names[predicted_index]
+    confidence = float(np.max(predictions[0]))
 
-    # Set input tensor
-    interpreter.set_tensor(input_details[0]['index'], input_data)
-    interpreter.invoke()
-
-    # Get output
-    output_data = interpreter.get_tensor(output_details[0]['index'])
-
-    class_index = int(np.argmax(output_data))
-    confidence = float(np.max(output_data))
-
-    return {
-        "predicted_class": labels[class_index],
-        "confidence": confidence
-    }
+    return {"label": predicted_label, "confidence": round(confidence, 3)}
