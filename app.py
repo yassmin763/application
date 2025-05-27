@@ -7,7 +7,7 @@ import uvicorn
 import io
 
 app = FastAPI()
-CORS(app)
+
 # Allow CORS for Flutter app
 app.add_middleware(
     CORSMiddleware,
