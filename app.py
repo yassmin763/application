@@ -3,12 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.models import load_model
 import io
 import os
 import zipfile
 
 app = FastAPI()
 
+# === إعدادات CORS للسماح بالاتصالات الخارجية (مهمة لتطبيقات الويب) ===
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,26 +21,25 @@ app.add_middleware(
 
 @app.get("/fati")
 def root():
-    return {"message": "API is running"}
+    return {"message": "✅ API تعمل بنجاح"}
 
-# === Unzip model.zip if not already extracted ===
+# === إعدادات النموذج ===
 MODEL_DIR = "model"
 ZIP_FILE = "model.zip"
-TFLITE_MODEL_PATH = os.path.join(MODEL_DIR, "model.h5")
+H5_MODEL_PATH = os.path.join(MODEL_DIR, "model.h5")
 
-if not os.path.exists(TFLITE_MODEL_PATH):
-    print("📦 Unzipping model...")
+# === فك ضغط النموذج إذا لم يكن موجودًا ===
+if not os.path.exists(H5_MODEL_PATH):
+    print("📦 فك ضغط النموذج...")
     with zipfile.ZipFile(ZIP_FILE, 'r') as zip_ref:
         zip_ref.extractall(MODEL_DIR)
-    print("✅ Model unzipped!")
+    print("✅ تم فك ضغط النموذج!")
 
-# === Load TFLite model ===
-interpreter = tf.lite.Interpreter(model_path=TFLITE_MODEL_PATH)
-interpreter.allocate_tensors()
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+# === تحميل النموذج بصيغة .h5 ===
+model = load_model(H5_MODEL_PATH)
+print("✅ النموذج تم تحميله بنجاح.")
 
-# === Class labels ===
+# === الفئات ===
 labels = [
     'cecropia', 'combretum', 'mabea', 'serjania', 'protium', 'arecaceae',
     'arrabidaea', 'senegalia', 'matayba', 'chromolaena', 'urochloa',
@@ -46,28 +47,25 @@ labels = [
     'eucalipto', 'croton', 'syagrus', 'schinus', 'faramea', 'hyptis', 'myrcia'
 ]
 
-# === Preprocessing Function ===
+# === دالة تجهيز الصورة للتنبؤ ===
 def preprocess(image_bytes):
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     image = image.resize((128, 128))
     img_array = np.array(image).astype(np.float32) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    img_array = np.expand_dims(img_array, axis=0)  # الشكل = (1, 128, 128, 3)
     return img_array
 
-# === Prediction Route ===
+# === نقطة التنبؤ ===
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     contents = await file.read()
     input_data = preprocess(contents)
 
-    interpreter.set_tensor(input_details[0]['index'], input_data)
-    interpreter.invoke()
-    output_data = interpreter.get_tensor(output_details[0]['index'])
+    predictions = model.predict(input_data)
+    class_index = int(np.argmax(predictions))
+    confidence = float(np.max(predictions))
 
-    class_index = int(np.argmax(output_data))
-    confidence = float(np.max(output_data))
-    result = {
+    return {
         "class": labels[class_index],
         "confidence": round(confidence, 4)
     }
-    return result
