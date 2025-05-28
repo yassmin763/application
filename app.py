@@ -24,58 +24,49 @@ app.add_middleware(
 @app.get("/fati")
 def root():
     return {"message": "API is running"}
-# تحميل نموذج TFLite
+# تحميل النموذج
 interpreter = tf.lite.Interpreter(model_path="model.tflite")
 interpreter.allocate_tensors()
 
-# معلومات الإدخال والإخراج
+# الحصول على معلومات الإدخال والإخراج
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-IMG_HEIGHT = input_details[0]['shape'][1]
-IMG_WIDTH = input_details[0]['shape'][2]
+# أسماء الأصناف (استبدل بالأسماء الحقيقية)
+class_names = [
+    "daisy",
+    "dandelion",
+    "rose",
+    "sunflower",
+    "tulip"
+]
 
-# أسماء الفئات
-CLASS_NAMES = ['anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
-    'combretum', 'croton', 'dipteryx', 'eucalipto', 'faramea', 'hyptis', 'mabea',
-    'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
-    'serjania', 'syagrus', 'tridax', 'urochloa']
-# تجهيز الصورة
-def preprocess_image(image: Image.Image):
-    image = image.resize((IMG_WIDTH, IMG_HEIGHT))
-    img_array = np.array(image).astype(np.float32)
-    if img_array.ndim == 2:
-        img_array = np.stack((img_array,) * 3, axis=-1)
-    elif img_array.shape[2] == 4:
-        img_array = img_array[:, :, :3]
-    img_array = img_array / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    return img_array
+# إعداد الصورة
+def preprocess_image(image_bytes):
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = image.resize((128, 128))  # الحجم المطلوب من النموذج
+    image_array = np.array(image) / 255.0
+    image_array = np.expand_dims(image_array, axis=0).astype(np.float32)
+    return image_array
 
 # التنبؤ
-def predict(image_array):
-    interpreter.set_tensor(input_details[0]['index'], image_array)
+def predict(image_bytes):
+    input_data = preprocess_image(image_bytes)
+    interpreter.set_tensor(input_details[0]['index'], input_data)
     interpreter.invoke()
-    output = interpreter.get_tensor(output_details[0]['index'])
-    predicted_index = int(np.argmax(output))
-    confidence = float(np.max(output))
-    return CLASS_NAMES[predicted_index], confidence
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+    predicted_class = int(np.argmax(output_data))
+    confidence = float(np.max(output_data))
+    return predicted_class, confidence
 
-# نقطة التنبؤ
+# نقطة النهاية الرئيسية
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
-    contents = await file.read()
-    image = Image.open(io.BytesIO(contents)).convert("RGB")
-
-    input_array = preprocess_image(image)
-    label, confidence = predict(input_array)
-
-    return JSONResponse(content={
-        "prediction": label,
-        "confidence": round(confidence * 100, 2)
+    image_bytes = await file.read()
+    predicted_class, confidence = predict(image_bytes)
+    class_name = class_names[predicted_class]
+    return JSONResponse({
+        "predicted_class": predicted_class,
+        "class_name": class_name,
+        "confidence": round(confidence, 4)
     })
-            "confidence": round(confidence, 4)
-        })
-
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
