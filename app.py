@@ -33,13 +33,10 @@ input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
 # أسماء الأصناف (استبدل بالأسماء الحقيقية)
-class_names = [
-    "daisy",
-    "dandelion",
-    "rose",
-    "sunflower",
-    "tulip"
-]
+class_names = ['anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
+    'combretum', 'croton', 'dipteryx', 'eucalipto', 'faramea', 'hyptis', 'mabea',
+    'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
+    'serjania', 'syagrus', 'tridax', 'urochloa']
 
 # إعداد الصورة
 def preprocess_image(image_bytes):
