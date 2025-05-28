@@ -25,11 +25,7 @@ interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-labels = ['anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
-    'combretum', 'croton', 'dipteryx', 'eucalipto', 'faramea', 'hyptis', 'mabea',
-    'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
-    'serjania', 'syagrus', 'tridax', 'urochloa']
-
+labels = ['cecropia', 'combretum', 'mabea', 'serjania', 'protium', 'arecaceae', 'arrabidaea', 'senegalia', 'matayba', 'chromolaena', 'urochloa', 'mimosa', 'tridax', 'qualea', 'dipteryx', 'anadenanthera', 'eucalipto', 'croton', 'syagrus', 'schinus', 'faramea', 'hyptis', 'myrcia']
 def preprocess(image_bytes):
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     image = image.resize((128, 128))
