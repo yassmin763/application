@@ -25,12 +25,11 @@ ZIP_FILE = "model.zip"
 H5_MODEL_PATH = os.path.join(MODEL_DIR, "model.h5")
 
 # تصنيفات الصور
-labels = [
-    'cecropia', 'combretum', 'mabea', 'serjania', 'protium', 'arecaceae',
-    'arrabidaea', 'senegalia', 'matayba', 'chromolaena', 'urochloa',
-    'mimosa', 'tridax', 'qualea', 'dipteryx', 'anadenanthera',
-    'eucalipto', 'croton', 'syagrus', 'schinus', 'faramea', 'hyptis', 'myrcia'
-]
+labels = ['anadenanthera', 'arecaceae', 'arrabidaea', 'cecropia', 'chromolaena',
+    'combretum', 'croton', 'dipteryx', 'eucalipto', 'faramea', 'hyptis', 'mabea',
+    'matayba', 'mimosa', 'myrcia', 'protium', 'qualea', 'schinus', 'senegalia',
+    'serjania', 'syagrus', 'tridax', 'urochloa']
+
 
 # تحميل Lazy للنموذج
 model = None  # سيتم تحميله عند أول طلب
