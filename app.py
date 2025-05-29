@@ -54,9 +54,15 @@ def load_model_lazy():
 
 # دالة المعالجة المسبقة للصورة
 def preprocess(image_bytes):
+    # فتح الصورة بصيغة RGB (لأن PIL يفتحها هكذا)
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    # تغيير الحجم مثل التدريب
     image = image.resize((128, 128))
+    # تحويل الصورة إلى مصفوفة NumPy
     img_array = np.array(image).astype(np.float32) / 255.0
+    # تحويل من RGB إلى BGR لتطابق OpenCV
+    img_array = img_array[..., ::-1]
+    # إضافة بعد جديد لتناسب الإدخال في النموذج
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
 
